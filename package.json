@@ -1,0 +1,28 @@
+{
+  "name": "linter-clojure-repl",
+  "main": "./lib/linter-clojure-repl",
+  "version": "0.0.0",
+  "description": "A short description of your package",
+  "keywords": [],
+  "repository": "https://github.com/atom/linter-clojure-repl",
+  "license": "MIT",
+  "engines": {
+    "atom": ">=1.0.0 <2.0.0"
+  },
+  "dependencies": {
+    "bencode": "^0.10.0",
+    "ramda": "^0.22.1",
+    "rxjs": "^5.0.0-rc.1",
+    "tree-kill": "^1.1.0"
+  },
+  "activationHooks": [
+    "language-clojure:grammar-used"
+  ],
+  "providedServices": {
+    "linter": {
+      "versions": {
+        "1.0.0": "provideLinter"
+      }
+    }
+  }
+}
