@@ -18,6 +18,17 @@
             correct-path (first (filter #(.exists (io/as-file (str % "/" filename))) source-paths))]
            (str correct-path "/" filename)))
 
+(defn filename->namespace [filename opts]
+      (let [source-paths (map str (opts :source-paths))
+            correct-path (first (filter #(clojure.string/starts-with? filename %) source-paths))]
+           (if (nil? correct-path)
+               nil
+               (->  filename
+                    (subs (+ (count correct-path) 1))
+                    (clojure.string/replace "_" "-")
+                    (clojure.string/replace ".clj" "")
+                    (clojure.string/replace "/" ".")
+                    symbol))))
 
 (defn lint-analyze-results [analyze-results linter-kw opt]
   (if-let [lint-fn (get-in lint/linter-name->info [linter-kw :fn])]
@@ -43,6 +54,13 @@
                       {:infos [] :warnings []}
                       (opts :enabled-linters)))))
 
+(defn lint-filename [filename opts]
+  (let [namespace (filename->namespace filename opts)]
+       (if (nil? namespace)
+           (throw (Exception. "File not found in source path"))
+           (do  (create-ns namespace)
+                (lint-ns namespace opts)))))
+
 (defn lint-all [opts]
   (let  [_ (atom 0)
          {:keys [namespaces dirs no-ns-form-found-files
@@ -60,38 +78,44 @@
                         {}
                         namespaces)))))
 
-(defn lint-then-encode [opts]
-      (let  [all-results (lint-all opts)]
-            (reduce-kv  (fn [m filename result]
-                            (if (result :exception)
-                                (str m
-                                     "@@@@Error%%%%"
-                                     (.getMessage (result :exception))
-                                     "%%%%"
-                                     filename
-                                     "%%%%"
-                                     (get-in result [:meta :line] 1)
-                                     "%%%%"
-                                     (get-in result [:meta :column] 1)
-                                     "%%%%"
-                                     (get-in result [:meta :end-line] 1)
-                                     "%%%%"
-                                     (get-in result [:meta :end-column] 1))
-                                (reduce (fn [m2 warning]
-                                            (str  m
-                                                  "@@@@Warning%%%%"
-                                                  (str (warning :linter) "-" (warning :msg))
-                                                  "%%%%"
-                                                  filename
-                                                  "%%%%"
-                                                  (get warning :line 1)
-                                                  "%%%%"
-                                                  (get warning :column 1)
-                                                  "%%%%"
-                                                  (get warning :end-line 1)
-                                                  "%%%%"
-                                                  (get warning :end-column 1)))
-                                        m
-                                        (result :warnings))))
-                        ""
+(defn encode-result [filename result]
+  (if (result :exception)
+      (str "@@@@Error%%%%"
+           (.getMessage (result :exception))
+           "%%%%"
+           filename
+           "%%%%"
+           (get-in result [:meta :line] 1)
+           "%%%%"
+           (get-in result [:meta :column] 1)
+           "%%%%"
+           (get-in result [:meta :end-line] (get-in result [:meta :line] 1))
+           "%%%%"
+           (get-in result [:meta :end-column] (get-in result [:meta :column] 1)))
+      (reduce (fn [m warning]
+                  (str  m
+                        "@@@@Warning%%%%"
+                        (str (warning :linter) "-" (warning :msg))
+                        "%%%%"
+                        filename
+                        "%%%%"
+                        (get warning :line 1)
+                        "%%%%"
+                        (get warning :column 1)
+                        "%%%%"
+                        (get warning :end-line (get warning :line 1))
+                        "%%%%"
+                        (get warning :end-column (get warning :column 1))))
+              ""
+              (result :warnings))))
+
+(defn lint-all-then-encode [opts]
+  (let  [all-results (lint-all opts)]
+        (reduce-kv  (fn [m filename result]
+                        (str m (encode-result filename result)))
+                    ""
                         all-results)))
+
+
+(defn lint-filename-then-encode [filename opts]
+      (encode-result filename (lint-filename filename opts)))
